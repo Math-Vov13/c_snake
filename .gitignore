@@ -420,3 +420,25 @@ FodyWeavers.xsd
 
 ## custom
 ./game
+
+# C++ Snake Game specific
+snake_game
+snake_game_cov
+
+# Coverage files
+coverage.info
+coverage_report/
+*.gcda
+*.gcno
+
+# SonarQube files
+sonar-project.properties
+bw-output/
+.warnings.xml
+
+# Compiler warnings report
+warnings.txt
+warnings.xml
+
+# SFML specific
+sfml-cmake/
