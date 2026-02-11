@@ -1,70 +1,96 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
+#include <SFML/Window/Keyboard.hpp>
 #include <cstdio>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
 
-class object{
+class Props{
     // Class Object to show on screen
     public:
     int x;
     int y;
     sf::RectangleShape shape;
-    object(int x, int y){
+    Props(int x, int y){
         this->x = x;
         this->y = y;
         shape.setSize({20, 20});
         shape.setPosition({(float)x, (float)y});
     }
-
-    ~object(){
-    }
 };
 
-class item : public object{
+class Item : public Props{
     // Utilities item for player
     public:
     sf::Color COLOR;
     std::string NAME;
     std::string DESCRIPTION;
-    item(int x, int y) : object(x, y) {
+    Item(int x, int y) : Props(x, y) {
     }
 };
 
-class apple : public item{
+class Apple : public Item{
     // Apple : eat to grow
     public:
     const sf::Color COLOR = sf::Color::Red;
     const std::string NAME = "Apple";
     const std::string DESCRIPTION = "Gives you +1 level";
 
-    apple(int x, int y) : item(x, y) {
+    Apple(int x, int y) : Item(x, y) {
         shape.setFillColor(COLOR);
     }
 };
 
-class boost : item{
+class Boost : Item{
     // boost : eat to move faster
     public:
     const sf::Color COLOR = sf::Color::Blue;
     const std::string NAME = "Speed Boost";
     const std::string DESCRIPTION = "Gives you x1.5 movement speed";
 
-    boost(int x, int y) : item(x, y) {
+    Boost(int x, int y) : Item(x, y) {
         shape.setFillColor(COLOR);
     }
 };
 
-class snake_queue : object{
+class SnakeQueue : Props{
     // snake queue block
+    public:
+    const sf::Color COLOR = sf::Color::Green;
+
+    SnakeQueue(int x, int y) : Props(x, y) {
+        shape.setFillColor(COLOR);
+    }
 };
 
-class snake{
+class Snake{
     // snake playable
+    private:
+    std::vector<SnakeQueue> items_queue;
+
+    void init_snake_queue(){
+        for (int i=0; i < snakeSize; i++) {
+            SnakeQueue newSnakeQueueBlock(1, 2);
+            items_queue.push_back(newSnakeQueueBlock);
+        }
+    }
+
+    public:
+    int snakeSize = 5;
+    int orientation = 90;
+    int headPos = 0;
+
+    void changeOrientation(int degree){
+        orientation += degree;
+    }
+
+    Snake(){
+        init_snake_queue();
+    }
 };
 
-class game{
+class Game{
     // game interface (main class)
     private:
     sf::RenderWindow* window;
@@ -73,8 +99,8 @@ class game{
     sf::Text text;
 
     int frame = 0;
-    snake Snake;
-    std::vector<object> object_to_show;
+    Snake* snake;
+    std::vector<Props> object_to_show;
 
     public:
     const int WIDTH = 800;
@@ -86,6 +112,13 @@ class game{
     const sf::Color BACKGROUND_COLOR = sf::Color::Black;
     const sf::Color GRID_COLOR = sf::Color::White;
 
+    Game(){
+        // create the window
+        window = new sf::RenderWindow(sf::VideoMode({(unsigned int)WIDTH, (unsigned int)HEIGHT}), "Snake Game");
+        // create the snake
+        snake = new Snake();
+    }
+
     void start(){
         // Create lines on the grid
         for (int x = BORDER_SIZE; x <= WIDTH - BORDER_SIZE; x += BLOC_SIZE) {
@@ -96,7 +129,6 @@ class game{
             lines.push_back(sf::Vertex(sf::Vector2f(BORDER_SIZE, y), GRID_COLOR));
             lines.push_back(sf::Vertex(sf::Vector2f(WIDTH - BORDER_SIZE, y), GRID_COLOR));
         }
-        printf("Taille %d", (int)lines.size());
 
         // Try to load font
         if (!font.loadFromFile("fonts/arial.ttf")) {
@@ -110,9 +142,6 @@ class game{
             text.setPosition(10, 10);
         }
 
-        // create the window
-        window = new sf::RenderWindow(sf::VideoMode({(unsigned int)WIDTH, (unsigned int)HEIGHT}), "Snake Game");
-
         // run the program as long as the window is open
         while (window->isOpen())
         {
@@ -121,8 +150,20 @@ class game{
             while (window->pollEvent(event))
             {
                 // "close requested" event: we close the window
-                if (event.type == sf::Event::Closed)
+                if (event.type == sf::Event::Closed) {
                     window->close();
+                } else if (event.type == sf::Event::KeyPressed) {
+                    // Handle key press event
+                    if (event.key.code == sf::Keyboard::Space) {
+                        // Do something when the space bar is pressed
+                    } else if (event.key.code == sf::Keyboard::Left) {
+                        // Do something when the left arrow key is pressed
+                        snake->changeOrientation(45);
+                    } else if (event.key.code == sf::Keyboard::Right) {
+                        // Do something when the right arrow key is pressed
+                        snake->changeOrientation(-45);
+                    }
+                }
             }
 
             // Génération aléatoire (0.1% de chance par frame)
@@ -157,24 +198,25 @@ class game{
         printf("spawning random item...");
         int randomX = rand() % (WIDTH - (BORDER_SIZE * 2) - 10) + BORDER_SIZE;
         int randomY = rand() % (HEIGHT - (BORDER_SIZE * 2) - 10) + BORDER_SIZE;
-        apple new_item = apple(randomX, randomY);
+        Apple new_item = Apple(randomX, randomY);
         printf("New Item: %s\n", new_item.NAME.c_str());
         object_to_show.push_back(new_item);
     }
 
-    ~game() {
+    ~Game() {
         delete window;
+        delete snake;
     }
 };
 
 int main()
 {
-    srand(time(NULL));  // Initialise le générateur aléatoire
+    srand(time(NULL));  // Init random generator
     printf("Starting rendering: c_snake window\n");
 
     // Run game
-    game Game = game();
-    Game.start();
+    Game gameInstance = Game();
+    gameInstance.start();
 
     printf("Thank you for playing!\n");
 }
