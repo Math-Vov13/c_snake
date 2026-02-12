@@ -1,10 +1,15 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Window/Keyboard.hpp>
+#include <array>
+#include <cmath>
 #include <cstdio>
+#include <deque>
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+
+using namespace std;
 
 class Props{
     // Class Object to show on screen
@@ -24,8 +29,8 @@ class Item : public Props{
     // Utilities item for player
     public:
     sf::Color COLOR;
-    std::string NAME;
-    std::string DESCRIPTION;
+    string NAME;
+    string DESCRIPTION;
     Item(int x, int y) : Props(x, y) {
     }
 };
@@ -34,8 +39,8 @@ class Apple : public Item{
     // Apple : eat to grow
     public:
     const sf::Color COLOR = sf::Color::Red;
-    const std::string NAME = "Apple";
-    const std::string DESCRIPTION = "Gives you +1 level";
+    const string NAME = "Apple";
+    const string DESCRIPTION = "Gives you +1 level";
 
     Apple(int x, int y) : Item(x, y) {
         shape.setFillColor(COLOR);
@@ -46,47 +51,88 @@ class Boost : Item{
     // boost : eat to move faster
     public:
     const sf::Color COLOR = sf::Color::Blue;
-    const std::string NAME = "Speed Boost";
-    const std::string DESCRIPTION = "Gives you x1.5 movement speed";
+    const string NAME = "Speed Boost";
+    const string DESCRIPTION = "Gives you x1.5 movement speed";
 
     Boost(int x, int y) : Item(x, y) {
         shape.setFillColor(COLOR);
     }
 };
 
-class SnakeQueue : Props{
+class SnakeQueue : public Props{
     // snake queue block
     public:
     const sf::Color COLOR = sf::Color::Green;
 
     SnakeQueue(int x, int y) : Props(x, y) {
         shape.setFillColor(COLOR);
+        shape.setSize({15, 15});
     }
 };
 
 class Snake{
     // snake playable
     private:
-    std::vector<SnakeQueue> items_queue;
+    array<float, 2> calculNextPos(){
+        // Calculate next position using trigonometric circle
+        // Convert orientation to radians (degrees to radians)
+        float radians = orientation * M_PI / 180.0f;
 
-    void init_snake_queue(){
-        for (int i=0; i < snakeSize; i++) {
-            SnakeQueue newSnakeQueueBlock(1, 2);
-            items_queue.push_back(newSnakeQueueBlock);
-        }
+        auto nextPos = headPos;
+        // Calculate new position based on orientation
+        nextPos[0] += blocSize * sin(radians);  // X coordinate
+        nextPos[1] -= blocSize * cos(radians);  // Y coordinate (negative because Y axis is inverted)
+
+        // (HARD CODED) grid limits => tp snake
+        if (nextPos[0] <= (20 + 20) )
+            nextPos[0] = 800 - 50;
+        if (nextPos[0] >= (800 - 45) )
+            nextPos[0] = 20 + 20;
+        if (nextPos[1] <= (20 + 20) )
+            nextPos[1] = 600 - 50;
+        if (nextPos[1] >= (600 - 45) )
+            nextPos[1] = 20 + 20;
+
+        return nextPos;
+    }
+
+    void addNewStage(array<float, 2> newPos) {
+        headPos = newPos;
+        auto newSnakeHead = SnakeQueue(newPos[0], newPos[1]);
+        items_queue.push_back(newSnakeHead); // Add new head
     }
 
     public:
-    int snakeSize = 5;
-    int orientation = 90;
-    int headPos = 0;
+    int blocSize = 15;
+    int orientation = 0;
+    array<float, 2> headPos;
+    deque<SnakeQueue> items_queue;
+
+    void move(){
+        auto newPos = calculNextPos();
+        addNewStage(newPos); // Add new head
+        items_queue.pop_front(); // Remove back
+    }
+
+    void growth(int addSize = 1) {
+        for (int i=0; i < addSize; i++) {
+            auto newPos = calculNextPos();
+            addNewStage(newPos); // Add new head
+        }
+    }
 
     void changeOrientation(int degree){
+        // Orientation:
+        // 0° / 360° => up
+        // 90° => left
+        // 270° => right
+        // 180° => down
         orientation += degree;
     }
 
-    Snake(){
-        init_snake_queue();
+    Snake(array<float, 2> startPos){
+        headPos = startPos;
+        growth(5);
     }
 };
 
@@ -94,13 +140,13 @@ class Game{
     // game interface (main class)
     private:
     sf::RenderWindow* window;
-    std::vector<sf::Vertex> lines;
+    vector<sf::Vertex> lines;
     sf::Font font;
     sf::Text text;
 
     int frame = 0;
     Snake* snake;
-    std::vector<Props> object_to_show;
+    vector<Props> object_to_show;
 
     public:
     const int WIDTH = 800;
@@ -116,7 +162,7 @@ class Game{
         // create the window
         window = new sf::RenderWindow(sf::VideoMode({(unsigned int)WIDTH, (unsigned int)HEIGHT}), "Snake Game");
         // create the snake
-        snake = new Snake();
+        snake = new Snake({(float) WIDTH / 2 - BORDER_SIZE, (float) HEIGHT / 2 - BORDER_SIZE + 120});
     }
 
     void start(){
@@ -158,12 +204,16 @@ class Game{
                         // Do something when the space bar is pressed
                     } else if (event.key.code == sf::Keyboard::Left) {
                         // Do something when the left arrow key is pressed
-                        snake->changeOrientation(45);
+                        snake->changeOrientation(-90);
                     } else if (event.key.code == sf::Keyboard::Right) {
                         // Do something when the right arrow key is pressed
-                        snake->changeOrientation(-45);
+                        snake->changeOrientation(90);
                     }
                 }
+            }
+
+            if (frame % 2500 == 0) {
+                snake->move();
             }
 
             // Génération aléatoire (0.1% de chance par frame)
@@ -180,9 +230,15 @@ class Game{
 
         // draw everything here...
         // first layer: items
-        for (int i = 0; i < object_to_show.end() - object_to_show.begin(); i++) {
+        // 1. usable
+        for (auto i = 0; i < object_to_show.end() - object_to_show.begin(); i++) {
             window->draw(object_to_show[i].shape);
         }
+        // 2. snake
+        for (auto i = 0; i < (int)snake->items_queue.size(); i++) {
+            window->draw(snake->items_queue.at(i).shape);
+        }
+
         // second layer: grid
         window->draw(&lines[0], lines.size(), sf::Lines);
         // third layer: texts & scores
@@ -211,11 +267,11 @@ class Game{
 
 int main()
 {
-    srand(time(NULL));  // Init random generator
+    srand(time(nullptr));  // Init random generator
     printf("Starting rendering: c_snake window\n");
 
     // Run game
-    Game gameInstance = Game();
+    auto gameInstance = Game();
     gameInstance.start();
 
     printf("Thank you for playing!\n");
