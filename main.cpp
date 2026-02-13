@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <optional>
 
 using namespace std;
 
@@ -26,45 +27,57 @@ class Props{
 };
 
 class Item : public Props{
-    // Utilities item for player
     public:
     sf::Color COLOR;
-    string NAME;
     string DESCRIPTION;
+    virtual string getName() const = 0;
     Item(int x, int y) : Props(x, y) {
+        shape.setSize({15, 15});
     }
 };
 
 class Apple : public Item{
-    // Apple : eat to grow
     public:
     const sf::Color COLOR = sf::Color::Red;
-    const string NAME = "Apple";
     const string DESCRIPTION = "Gives you +1 level";
+
+    virtual string getName() const override { return "Apple"; }
 
     Apple(int x, int y) : Item(x, y) {
         shape.setFillColor(COLOR);
     }
 };
 
-class Boost : Item{
-    // boost : eat to move faster
+class Boost : public Item{
     public:
     const sf::Color COLOR = sf::Color::Blue;
-    const string NAME = "Speed Boost";
     const string DESCRIPTION = "Gives you x1.5 movement speed";
+
+    virtual string getName() const override { return "Speed Boost"; }
 
     Boost(int x, int y) : Item(x, y) {
         shape.setFillColor(COLOR);
     }
 };
 
-class SnakeQueue : public Props{
+class RottenApple : public Item{
+    public:
+    const sf::Color COLOR = sf::Color::Yellow;
+    const string DESCRIPTION = "Kills you";
+
+    virtual string getName() const override { return "Rotten Apple"; }
+
+    RottenApple(int x, int y) : Item(x, y) {
+        shape.setFillColor(COLOR);
+    }
+};
+
+class SnakeTail : public Props{
     // snake queue block
     public:
     const sf::Color COLOR = sf::Color::Green;
 
-    SnakeQueue(int x, int y) : Props(x, y) {
+    SnakeTail(int x, int y) : Props(x, y) {
         shape.setFillColor(COLOR);
         shape.setSize({15, 15});
     }
@@ -98,20 +111,51 @@ class Snake{
 
     void addNewStage(array<float, 2> newPos) {
         headPos = newPos;
-        auto newSnakeHead = SnakeQueue(newPos[0], newPos[1]);
-        items_queue.push_back(newSnakeHead); // Add new head
+        auto newSnakeHead = SnakeTail(newPos[0], newPos[1]);
+        items_tail.push_back(newSnakeHead); // Add new head
+    }
+
+    bool isHeadTouchingTail(){
+        return false;
+    }
+
+    optional<Item*> getEatingItem(){
+        float maxDist = 8.0f;
+
+        for (auto i = 0; i < (int) items_on_board->size(); i++) {
+            float dx = (*items_on_board)[i]->x - headPos[0];
+            float dy = (*items_on_board)[i]->y - headPos[1];
+            float dist = sqrt(dx*dx + dy*dy);
+
+            if (dist <= maxDist) {
+                Item* item = (*items_on_board)[i];
+                items_on_board->erase(items_on_board->begin() + i);
+                if (item->getName() == "Apple")
+                    growth(1);
+                if (item->getName() == "Speed Boost")
+                    growth(5);
+                if (item->getName() == "Rotten Apple")
+                    alive = false;
+                return item;
+            }
+        }
+
+        return nullopt;
     }
 
     public:
+    bool alive = true;
     int blocSize = 15;
     int orientation = 0;
     array<float, 2> headPos;
-    deque<SnakeQueue> items_queue;
+    deque<SnakeTail> items_tail;
+    vector<Item*>* items_on_board;
 
     void move(){
         auto newPos = calculNextPos();
         addNewStage(newPos); // Add new head
-        items_queue.pop_front(); // Remove back
+        getEatingItem(); // Eat item in front of the snake head
+        items_tail.pop_front(); // Remove back
     }
 
     void growth(int addSize = 1) {
@@ -142,11 +186,12 @@ class Game{
     sf::RenderWindow* window;
     vector<sf::Vertex> lines;
     sf::Font font;
-    sf::Text text;
+    sf::Text textFrames;
+    sf::Text textScore;
 
     int frame = 0;
     Snake* snake;
-    vector<Props> object_to_show;
+    vector<Item*> object_to_show;
 
     public:
     const int WIDTH = 800;
@@ -163,6 +208,8 @@ class Game{
         window = new sf::RenderWindow(sf::VideoMode({(unsigned int)WIDTH, (unsigned int)HEIGHT}), "Snake Game");
         // create the snake
         snake = new Snake({(float) WIDTH / 2 - BORDER_SIZE, (float) HEIGHT / 2 - BORDER_SIZE + 120});
+
+        snake->items_on_board = &object_to_show;
     }
 
     void start(){
@@ -182,10 +229,15 @@ class Game{
         }
 
         if (font.getInfo().family != "") { // Check if font was loaded successfully
-            text = sf::Text("Tick: 0", font); // Initialize with default text
-            text.setCharacterSize(24);
-            text.setFillColor(sf::Color::Red);
-            text.setPosition(10, 10);
+            textFrames = sf::Text("Frames: 0", font); // Initialize with default text
+            textFrames.setCharacterSize(24);
+            textFrames.setFillColor(sf::Color::Red);
+            textFrames.setPosition(10, 10);
+
+            textScore = sf::Text("Score: 0", font); // Initialize with default text
+            textScore.setCharacterSize(24);
+            textScore.setFillColor(sf::Color::Red);
+            textScore.setPosition(400, 10);
         }
 
         // run the program as long as the window is open
@@ -198,6 +250,7 @@ class Game{
                 // "close requested" event: we close the window
                 if (event.type == sf::Event::Closed) {
                     window->close();
+                    return;
                 } else if (event.type == sf::Event::KeyPressed) {
                     // Handle key press event
                     if (event.key.code == sf::Keyboard::Space) {
@@ -212,7 +265,13 @@ class Game{
                 }
             }
 
-            if (frame % 2500 == 0) {
+            if (snake->alive == false) {
+                window->close();
+                printf("Sorry your snake died! With a score of %d\n\n", (int)snake->items_tail.size());
+                return;
+            }
+
+            if (frame % 1500 == 0) {
                 snake->move();
             }
 
@@ -232,31 +291,42 @@ class Game{
         // first layer: items
         // 1. usable
         for (auto i = 0; i < object_to_show.end() - object_to_show.begin(); i++) {
-            window->draw(object_to_show[i].shape);
+            window->draw((*object_to_show[i]).shape);
         }
         // 2. snake
-        for (auto i = 0; i < (int)snake->items_queue.size(); i++) {
-            window->draw(snake->items_queue.at(i).shape);
+        for (auto i = 0; i < (int)snake->items_tail.size(); i++) {
+            window->draw(snake->items_tail.at(i).shape);
         }
 
         // second layer: grid
         window->draw(&lines[0], lines.size(), sf::Lines);
         // third layer: texts & scores
-        text.setString("frames: " + std::to_string(++frame));
-        window->draw(text);
+        textFrames.setString("Frames: " + std::to_string(++frame));
+        textScore.setString("Score: " + std::to_string(snake->items_tail.size() - 5));
+        window->draw(textFrames);
+        window->draw(textScore);
 
         // end the current frame
         window->display();
     }
 
     void generate_random_item(){
-        // generate only apple for the moment! :(
-        printf("spawning random item...");
         int randomX = rand() % (WIDTH - (BORDER_SIZE * 2) - 10) + BORDER_SIZE;
         int randomY = rand() % (HEIGHT - (BORDER_SIZE * 2) - 10) + BORDER_SIZE;
-        Apple new_item = Apple(randomX, randomY);
-        printf("New Item: %s\n", new_item.NAME.c_str());
-        object_to_show.push_back(new_item);
+
+        int roll = rand() % 100;
+        Item* item;
+
+        if (roll < 70) {
+            item = new Apple(randomX, randomY);
+        } else if (roll < 90) {
+            item = new Boost(randomX, randomY);
+        } else {
+            item = new RottenApple(randomX, randomY);
+        }
+
+        object_to_show.push_back(item);
+        printf("New Item: %s\n", item->getName().c_str());
     }
 
     ~Game() {

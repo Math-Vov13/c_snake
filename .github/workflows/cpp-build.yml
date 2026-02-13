@@ -7,7 +7,7 @@ on:
     branches: ["main"]
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++ make libsfml-dev lcov
+          sudo apt-get install -y g++ make libsfml-dev
 
       - name: Compile project
         run: |
@@ -27,3 +27,45 @@ jobs:
         with:
           name: snake-game-linux
           path: snake_game
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SFML
+        run: brew install sfml
+
+      - name: Compile project
+        run: |
+          g++ -std=c++17 -Wall -Wextra -pedantic main.cpp -o snake_game -lsfml-graphics -lsfml-window -lsfml-system
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: snake-game-macos
+          path: snake_game
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-sfml
+
+      - name: Compile project
+        shell: msys2 {0}
+        run: |
+          g++ -std=c++17 -Wall -Wextra -pedantic main.cpp -o snake_game.exe -lsfml-graphics -lsfml-window -lsfml-system
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: snake-game-windows
+          path: snake_game.exe
